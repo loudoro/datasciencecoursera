@@ -1,0 +1,78 @@
+---
+title: "Pratical Machine Learning"
+output: html_document
+---
+
+#### Getting and preprocessing data
+* Take out the first 7 categorical variables that are not going to be useful for prediction
+* Change NAs to 0s and remove near zero variables.
+* Create a training set and a testing set.
+```{r, message=FALSE, warning=FALSE }
+data = read.csv("~/Downloads/pml-training.csv")
+library(caret)
+
+## take out unuseful columns 
+data = data[, -(1:7)]
+
+## remove near zero variables
+data[is.na(data)] = 0
+nsv = nearZeroVar(data)
+data = data[, -nsv]
+
+## create training and testing datasets
+inTrain = createDataPartition(data$classe, p = 0.7, list = F)
+training = data[inTrain,]
+testing = data[-inTrain,]
+
+```
+
+---
+#### Predictive Modeling
+Mutiple models were built with the training set and tested on the testing set to estimate out of sample error. KNN(K-Nearest Neighbors) and randomForest stand out for their prediction accuracy. 
+
+##### KNN
+For KNN, 3 repeated 10-fold cross validations were used to fit the model and estimate out of sample error. The testing set was then used to validate prediction accuracy.
+
+```{r , echo=FALSE, warning=FALSE}
+### KNN
+modelKNN= train(classe ~., data = training, method = "knn", preProcess = "pca", trControl = trainControl(method = "repeatedcv", repeats = 3))
+print(modelKNN)
+confusionMatrix(testing$classe, predict(modelKNN, testing))
+
+### boosting
+#modelGbm = train(classe ~ ., method = "gbm", data = training, preProcess = "pca", trControl = trainControl(method = "repeatedcv", repeats = 3), verbose=FALSE)
+#print(modelGbm)
+#confusionMatrix(testing$classe, predict(modelGbm, testing))
+
+```
+
+##### Random Forest
+Random Forest randomly selects both features and samples and therefore produces an unbiased out of sample error without cross validation.
+
+Because of its higher prediction accuracy, Random Forest was selected as the final model to predict the 20 test cases.
+```{r , echo=FALSE, warning=FALSE}
+
+### randomForest
+library(randomForest)
+modelRF = randomForest(classe ~ ., data = training, na.action = na.omit, ntree = 100, importance = T)
+print(modelRF)
+#varImpPlot(modelRF)
+confusionMatrix(testing$classe, predict(modelRF, testing))
+
+```
+
+```{r, include=FALSE}
+### test
+test = read.csv("~/Downloads/pml-testing.csv")
+answers = predict(modelRF, test)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+```
+
